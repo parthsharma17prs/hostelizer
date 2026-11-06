@@ -178,3 +178,140 @@ const PaymentSchema = new Schema<IPayment>({
 
 export const PaymentModel = mongoose.models.Payment || mongoose.model<IPayment>('Payment', PaymentSchema);
 
+// 7. Booking / Visit Request Schema (Student -> Property Visit & Bed Token Lock)
+export interface IBooking extends Document {
+  userId: mongoose.Types.ObjectId;
+  userName: string;
+  userPhone: string;
+  propertyId: mongoose.Types.ObjectId;
+  propertyName: string;
+  roomNumber?: string;
+  bedCode?: string;
+  bookingType: 'SCHEDULED_VISIT' | 'TOKEN_BOOKING' | 'INSTANT_LOCK';
+  visitDate?: string;
+  visitSlot?: string;
+  status: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+  tokenAmountPaid?: number;
+  paymentRef?: string;
+  createdAt: Date;
+}
+
+const BookingSchema = new Schema<IBooking>({
+  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  userName: { type: String, required: true },
+  userPhone: { type: String, required: true },
+  propertyId: { type: Schema.Types.ObjectId, ref: 'Property', required: true },
+  propertyName: { type: String, required: true },
+  roomNumber: { type: String },
+  bedCode: { type: String },
+  bookingType: { type: String, enum: ['SCHEDULED_VISIT', 'TOKEN_BOOKING', 'INSTANT_LOCK'], default: 'SCHEDULED_VISIT' },
+  visitDate: { type: String },
+  visitSlot: { type: String, default: '4:00 PM - 5:00 PM' },
+  status: { type: String, enum: ['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED'], default: 'PENDING' },
+  tokenAmountPaid: { type: Number, default: 0 },
+  paymentRef: { type: String },
+  createdAt: { type: Date, default: Date.now }
+});
+
+export const BookingModel = mongoose.models.Booking || mongoose.model<IBooking>('Booking', BookingSchema);
+
+// 8. Maintenance / Complaint Ticket Schema
+export interface IMaintenanceTicket extends Document {
+  propertyId: mongoose.Types.ObjectId;
+  propertyName: string;
+  residentName: string;
+  bedCode: string;
+  category: 'PLUMBING' | 'ELECTRICAL' | 'WIFI_INTERNET' | 'CLEANING' | 'FOOD_MESS' | 'CARPENTRY' | 'OTHER';
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'EMERGENCY';
+  issueDescription: string;
+  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+  resolvedAt?: Date;
+  ownerRemarks?: string;
+  createdAt: Date;
+}
+
+const MaintenanceTicketSchema = new Schema<IMaintenanceTicket>({
+  propertyId: { type: Schema.Types.ObjectId, ref: 'Property', required: true },
+  propertyName: { type: String, required: true },
+  residentName: { type: String, required: true },
+  bedCode: { type: String, required: true },
+  category: { 
+    type: String, 
+    enum: ['PLUMBING', 'ELECTRICAL', 'WIFI_INTERNET', 'CLEANING', 'FOOD_MESS', 'CARPENTRY', 'OTHER'], 
+    default: 'WIFI_INTERNET' 
+  },
+  priority: { type: String, enum: ['LOW', 'MEDIUM', 'HIGH', 'EMERGENCY'], default: 'MEDIUM' },
+  issueDescription: { type: String, required: true },
+  status: { type: String, enum: ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED'], default: 'OPEN' },
+  resolvedAt: { type: Date },
+  ownerRemarks: { type: String },
+  createdAt: { type: Date, default: Date.now }
+});
+
+export const MaintenanceTicketModel = mongoose.models.MaintenanceTicket || mongoose.model<IMaintenanceTicket>('MaintenanceTicket', MaintenanceTicketSchema);
+
+// 9. Verified Review & Rating Schema (Social Proof & Trust Engine)
+export interface IReview extends Document {
+  propertyId: mongoose.Types.ObjectId;
+  propertyName: string;
+  residentName: string;
+  ratingOverall: number; // 1 to 5
+  cleanlinessScore: number;
+  foodQualityScore: number;
+  wifiScore: number;
+  safetyScore: number;
+  title: string;
+  comment: string;
+  isVerifiedTenant: boolean;
+  createdAt: Date;
+}
+
+const ReviewSchema = new Schema<IReview>({
+  propertyId: { type: Schema.Types.ObjectId, ref: 'Property', required: true },
+  propertyName: { type: String, required: true },
+  residentName: { type: String, required: true },
+  ratingOverall: { type: Number, required: true, min: 1, max: 5 },
+  cleanlinessScore: { type: Number, default: 5, min: 1, max: 5 },
+  foodQualityScore: { type: Number, default: 4, min: 1, max: 5 },
+  wifiScore: { type: Number, default: 5, min: 1, max: 5 },
+  safetyScore: { type: Number, default: 5, min: 1, max: 5 },
+  title: { type: String, required: true },
+  comment: { type: String, required: true },
+  isVerifiedTenant: { type: Boolean, default: true },
+  createdAt: { type: Date, default: Date.now }
+});
+
+export const ReviewModel = mongoose.models.Review || mongoose.model<IReview>('Review', ReviewSchema);
+
+// 10. Notice / Announcement Board Schema
+export interface INoticeBoard extends Document {
+  propertyId: mongoose.Types.ObjectId;
+  propertyName: string;
+  title: string;
+  content: string;
+  category: 'FOOD_MENU' | 'EVENT' | 'MAINTENANCE_DOWNTIME' | 'REGULATION' | 'GENERAL';
+  isImportant: boolean;
+  postedBy: string;
+  expiresAt?: Date;
+  createdAt: Date;
+}
+
+const NoticeBoardSchema = new Schema<INoticeBoard>({
+  propertyId: { type: Schema.Types.ObjectId, ref: 'Property', required: true },
+  propertyName: { type: String, required: true },
+  title: { type: String, required: true },
+  content: { type: String, required: true },
+  category: { 
+    type: String, 
+    enum: ['FOOD_MENU', 'EVENT', 'MAINTENANCE_DOWNTIME', 'REGULATION', 'GENERAL'], 
+    default: 'GENERAL' 
+  },
+  isImportant: { type: Boolean, default: false },
+  postedBy: { type: String, default: 'Property Manager' },
+  expiresAt: { type: Date },
+  createdAt: { type: Date, default: Date.now }
+});
+
+export const NoticeBoardModel = mongoose.models.NoticeBoard || mongoose.model<INoticeBoard>('NoticeBoard', NoticeBoardSchema);
+
+
