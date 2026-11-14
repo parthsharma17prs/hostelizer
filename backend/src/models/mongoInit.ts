@@ -60,7 +60,7 @@ export async function populateComprehensiveSeedData(forceRefresh = false) {
         ownerStatus: 'APPROVED',
         createdAt: new Date('2026-01-10')
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     const ownerPriya = await UserModel.findOneAndUpdate(
@@ -74,7 +74,7 @@ export async function populateComprehensiveSeedData(forceRefresh = false) {
         ownerStatus: 'APPROVED',
         createdAt: new Date('2026-02-15')
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     const studentAman = await UserModel.findOneAndUpdate(
@@ -87,7 +87,7 @@ export async function populateComprehensiveSeedData(forceRefresh = false) {
         role: 'CUSTOMER',
         createdAt: new Date('2026-08-01')
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     const studentKavya = await UserModel.findOneAndUpdate(
@@ -100,7 +100,7 @@ export async function populateComprehensiveSeedData(forceRefresh = false) {
         role: 'CUSTOMER',
         createdAt: new Date('2026-08-05')
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     const superAdmin = await UserModel.findOneAndUpdate(
@@ -113,7 +113,7 @@ export async function populateComprehensiveSeedData(forceRefresh = false) {
         role: 'ADMIN',
         ownerStatus: 'APPROVED'
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     // 3. Seed Properties with Structured Cloudinary Assets
@@ -207,7 +207,7 @@ export async function populateComprehensiveSeedData(forceRefresh = false) {
           }
         ]
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     const propStanza = await PropertyModel.findOneAndUpdate(
@@ -271,7 +271,7 @@ export async function populateComprehensiveSeedData(forceRefresh = false) {
           }
         ]
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     const propAura = await PropertyModel.findOneAndUpdate(
@@ -323,7 +323,7 @@ export async function populateComprehensiveSeedData(forceRefresh = false) {
           }
         ]
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
 
     // 4. Seed Residents

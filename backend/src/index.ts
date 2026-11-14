@@ -1,8 +1,10 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes';
 import ownerRoutes from './routes/owner.routes';
 import adminRoutes from './routes/admin.routes';

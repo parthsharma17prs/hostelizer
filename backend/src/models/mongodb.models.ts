@@ -6,8 +6,20 @@ export interface IUser extends Document {
   email: string;
   phone: string;
   passwordHash: string;
+  authProvider: 'LOCAL' | 'GOOGLE' | 'OTP';
+  googleId?: string;
+  avatarUrl?: string;
+  isEmailVerified: boolean;
+  isPhoneVerified: boolean;
   role: 'CUSTOMER' | 'OWNER' | 'ADMIN' | 'VERIFICATION_ADMIN';
-  ownerStatus?: string;
+  ownerStatus?: 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
+  kycDocuments?: {
+    panCardUrl?: string;
+    aadhaarUrl?: string;
+    propertyDeedUrl?: string;
+    verifiedAt?: Date;
+  };
+  lastLoginAt?: Date;
   createdAt: Date;
 }
 
@@ -16,8 +28,20 @@ const UserSchema = new Schema<IUser>({
   email: { type: String, required: true, unique: true },
   phone: { type: String, required: true },
   passwordHash: { type: String, required: true },
+  authProvider: { type: String, enum: ['LOCAL', 'GOOGLE', 'OTP'], default: 'LOCAL' },
+  googleId: { type: String },
+  avatarUrl: { type: String },
+  isEmailVerified: { type: Boolean, default: false },
+  isPhoneVerified: { type: Boolean, default: false },
   role: { type: String, enum: ['CUSTOMER', 'OWNER', 'ADMIN', 'VERIFICATION_ADMIN'], default: 'CUSTOMER' },
-  ownerStatus: { type: String, default: 'APPROVED' },
+  ownerStatus: { type: String, enum: ['PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'], default: 'APPROVED' },
+  kycDocuments: {
+    panCardUrl: String,
+    aadhaarUrl: String,
+    propertyDeedUrl: String,
+    verifiedAt: Date
+  },
+  lastLoginAt: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
 

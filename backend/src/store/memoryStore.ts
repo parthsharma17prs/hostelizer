@@ -8,6 +8,8 @@ export interface DBUser {
   phone: string;
   passwordHash: string;
   role: 'CUSTOMER' | 'OWNER' | 'ADMIN' | 'VERIFICATION_ADMIN';
+  authProvider?: 'LOCAL' | 'GOOGLE' | 'OTP';
+  ownerStatus?: 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED' | 'SUSPENDED';
   createdAt: Date;
 }
 

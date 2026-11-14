@@ -1,11 +1,25 @@
+import mongoose from 'mongoose';
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { OAuth2Client } from 'google-auth-library';
+import twilio from 'twilio';
 import { db } from '../store/memoryStore';
 import { authenticateJwt, AuthenticatedRequest } from '../middleware/auth.middleware';
+import { UserModel } from '../models/mongodb.models';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-jwt-key-hostelizer-dev';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '399194229920-94g6o83t7mo9hsodpf4rq6h7lmebc7i7.apps.googleusercontent.com';
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+
+// Twilio Telephony Client Setup
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
+const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER || '';
+const twilioClient = (TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN)
+  ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+  : null;
 
 // In-memory store for OTP verification (stores: identifier -> { otp, expiresAt, role })
 const otpStore = new Map<string, { otp: string; expiresAt: number; role?: string }>();
@@ -13,7 +27,7 @@ const otpStore = new Map<string, { otp: string; expiresAt: number; role?: string
 // =========================================================================
 // 1. MOBILE / EMAIL OTP GENERATION & SEND
 // =========================================================================
-router.post('/otp/send', (req: Request, res: Response) => {
+router.post('/otp/send', async (req: Request, res: Response) => {
   const { identifier, channel } = req.body; // identifier: phone or email, channel: 'SMS' | 'EMAIL'
 
   if (!identifier) {
@@ -28,10 +42,49 @@ router.post('/otp/send', (req: Request, res: Response) => {
 
   console.log(`[AUTH-OTP] 🔐 Generated OTP for ${identifier} via ${channel || 'SMS'}: ${otp}`);
 
+  // Real Twilio SMS Delivery
+  let twilioMessageSid: string | undefined;
+  let twilioStatus: string | undefined;
+
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const twilioPhone = process.env.TWILIO_PHONE_NUMBER;
+  const client = (accountSid && authToken) ? twilio(accountSid, authToken) : null;
+
+  const isPhone = !identifier.includes('@');
+  if (isPhone && client && twilioPhone) {
+    try {
+      let formattedPhone = identifier.replace(/[\s-]/g, '');
+      if (!formattedPhone.startsWith('+')) {
+        if (formattedPhone.length === 10) {
+          formattedPhone = '+91' + formattedPhone;
+        } else {
+          formattedPhone = '+' + formattedPhone;
+        }
+      }
+
+      console.log(`[TWILIO] 📲 Attempting SMS to ${formattedPhone} from ${twilioPhone}...`);
+      const twilioMsg = await client.messages.create({
+        body: `Your Hostelizer verification code is ${otp}. Valid for 5 minutes. Do not share this code.`,
+        from: twilioPhone,
+        to: formattedPhone
+      });
+      twilioMessageSid = twilioMsg.sid;
+      twilioStatus = twilioMsg.status;
+      console.log(`[TWILIO] 🚀 SMS dispatched to ${formattedPhone}, SID: ${twilioMsg.sid}, status: ${twilioMsg.status}`);
+    } catch (twErr: any) {
+      console.warn(`[TWILIO] ⚠️ Twilio dispatch note: ${twErr.message}`);
+      twilioStatus = `failed: ${twErr.message}`;
+    }
+  }
+
   return res.json({
-    message: `6-digit OTP sent successfully to ${identifier}`,
-    channel: channel || (identifier.includes('@') ? 'EMAIL' : 'SMS'),
-    // Delivered in JSON response for instant presentation demo
+    message: twilioMessageSid 
+      ? `6-digit OTP sent via Twilio SMS to ${identifier}` 
+      : `6-digit OTP sent successfully to ${identifier}`,
+    channel: channel || (isPhone ? 'SMS' : 'EMAIL'),
+    twilioMessageSid,
+    twilioStatus,
     demoOtp: otp,
     expiresInSeconds: 300
   });
@@ -40,7 +93,7 @@ router.post('/otp/send', (req: Request, res: Response) => {
 // =========================================================================
 // 2. MOBILE / EMAIL OTP VERIFY & LOGIN
 // =========================================================================
-router.post('/otp/verify', (req: Request, res: Response) => {
+router.post('/otp/verify', async (req: Request, res: Response) => {
   const { identifier, otp, role, name } = req.body;
 
   if (!identifier || !otp) {
@@ -107,6 +160,29 @@ router.post('/otp/verify', (req: Request, res: Response) => {
     }
   }
 
+  // Sync user record to MongoDB Compass
+  if (mongoose.connection.readyState === 1) {
+    try {
+      await UserModel.findOneAndUpdate(
+        { email: user.email },
+        {
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          passwordHash: user.passwordHash,
+          authProvider: 'OTP',
+          role: user.role,
+          ownerStatus: ownerStatus || (user.role === 'OWNER' ? 'PENDING' : 'APPROVED'),
+          isPhoneVerified: true,
+          lastLoginAt: new Date()
+        },
+        { upsert: true, returnDocument: 'after' }
+      );
+    } catch (mongoErr) {
+      console.warn('MongoDB sync note in OTP verify:', mongoErr);
+    }
+  }
+
   const token = jwt.sign(
     {
       id: user.id,
@@ -137,23 +213,44 @@ router.post('/otp/verify', (req: Request, res: Response) => {
 // =========================================================================
 // 3. GOOGLE OAUTH 2.0 FEDERATED EXCHANGE
 // =========================================================================
-router.post('/google-oauth', (req: Request, res: Response) => {
+router.post('/google-oauth', async (req: Request, res: Response) => {
   const { credential, email, name, role } = req.body;
 
-  // In production, Google's ID Token is verified cryptographically using google-auth-library:
-  // const ticket = await client.verifyIdToken({ idToken: credential, audience: CLIENT_ID });
-  // const payload = ticket.getPayload();
+  let verifiedEmail = (email || '').toLowerCase();
+  let verifiedName = name || 'Google Verified User';
 
-  const userEmail = (email || 'google.user@gmail.com').toLowerCase();
-  const userName = name || 'Google Verified User';
+  // If client sent a cryptographic credential token and GOOGLE_CLIENT_ID is configured, verify with Google
+  if (credential && GOOGLE_CLIENT_ID) {
+    try {
+      const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: GOOGLE_CLIENT_ID
+      });
+      const payload = ticket.getPayload();
+      if (payload && payload.email) {
+        verifiedEmail = payload.email.toLowerCase();
+        verifiedName = payload.name || verifiedName;
+      }
+    } catch (err: any) {
+      console.warn('Google ID token verification failed:', err.message);
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(401).json({ error: 'Invalid Google credential token' });
+      }
+    }
+  }
+
+  if (!verifiedEmail) {
+    verifiedEmail = 'google.user@gmail.com';
+  }
+
   const assignedRole = (role === 'OWNER' ? 'OWNER' : 'CUSTOMER') as any;
 
-  let user = db.users.find(u => u.email.toLowerCase() === userEmail);
+  let user = db.users.find(u => u.email.toLowerCase() === verifiedEmail);
   if (!user) {
     user = {
       id: 'usr_g_' + Date.now(),
-      name: userName,
-      email: userEmail,
+      name: verifiedName,
+      email: verifiedEmail,
       phone: '+91 99000 88000',
       passwordHash: 'oauth_federated_google',
       role: assignedRole,
@@ -165,7 +262,7 @@ router.post('/google-oauth', (req: Request, res: Response) => {
       db.ownerProfiles.push({
         id: 'owner_g_' + Date.now(),
         userId: user.id,
-        businessName: `${userName}'s Properties`,
+        businessName: `${verifiedName}'s Properties`,
         status: 'PENDING',
         documents: [],
         createdAt: new Date()
@@ -181,6 +278,29 @@ router.post('/google-oauth', (req: Request, res: Response) => {
     if (profile) {
       ownerProfileId = profile.id;
       ownerStatus = profile.status;
+    }
+  }
+
+  // Sync to MongoDB Compass UserModel
+  if (mongoose.connection.readyState === 1) {
+    try {
+      await UserModel.findOneAndUpdate(
+        { email: user.email },
+        {
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          passwordHash: user.passwordHash,
+          authProvider: 'GOOGLE',
+          role: user.role,
+          ownerStatus: ownerStatus || (user.role === 'OWNER' ? 'PENDING' : 'APPROVED'),
+          isEmailVerified: true,
+          lastLoginAt: new Date()
+        },
+        { upsert: true, returnDocument: 'after' }
+      );
+    } catch (mongoErr) {
+      console.warn('MongoDB sync note in Google OAuth:', mongoErr);
     }
   }
 
@@ -310,6 +430,30 @@ router.post('/register', async (req: Request, res: Response) => {
       ownerStatus = newProfile.status;
     }
 
+    // Sync newly registered user to MongoDB Compass
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await UserModel.findOneAndUpdate(
+          { email: newUser.email },
+          {
+            name: newUser.name,
+            email: newUser.email,
+            phone: newUser.phone,
+            passwordHash: newUser.passwordHash,
+            authProvider: 'LOCAL',
+            role: newUser.role,
+            ownerStatus: ownerStatus || (newUser.role === 'OWNER' ? 'PENDING' : 'APPROVED'),
+            isEmailVerified: false,
+            isPhoneVerified: false,
+            lastLoginAt: new Date()
+          },
+          { upsert: true, returnDocument: 'after' }
+        );
+      } catch (mongoErr) {
+        console.warn('MongoDB sync note in register:', mongoErr);
+      }
+    }
+
     const token = jwt.sign(
       {
         id: newUser.id,
@@ -370,6 +514,18 @@ router.post('/login', async (req: Request, res: Response) => {
       if (profile) {
         ownerProfileId = profile.id;
         ownerStatus = profile.status;
+      }
+    }
+
+    // Sync last login timestamp to MongoDB Compass
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await UserModel.findOneAndUpdate(
+          { email: user.email },
+          { lastLoginAt: new Date() }
+        );
+      } catch (mongoErr) {
+        console.warn('MongoDB sync note in login:', mongoErr);
       }
     }
 

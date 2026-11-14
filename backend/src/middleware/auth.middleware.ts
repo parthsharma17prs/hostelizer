@@ -36,8 +36,8 @@ export const requireRoles = (allowedRoles: string[]) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
     if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ 
-        error: `Forbidden: role '${req.user.role}' does not have access to this resource` 
+      return res.status(403).json({
+        error: `Forbidden: role '${req.user.role}' does not have access to this resource`
       });
     }
     next();
@@ -49,8 +49,8 @@ export const requireApprovedOwner = (req: AuthenticatedRequest, res: Response, n
     return res.status(403).json({ error: 'Only owners can access this endpoint' });
   }
   if (req.user.ownerStatus !== 'APPROVED') {
-    return res.status(403).json({ 
-      error: `Owner account is ${req.user.ownerStatus || 'PENDING'}. Approved verification is required.` 
+    return res.status(403).json({
+      error: `Owner account is ${req.user.ownerStatus || 'PENDING'}. Approved verification is required.`
     });
   }
   next();

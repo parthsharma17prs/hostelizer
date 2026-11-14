@@ -1,11 +1,13 @@
+import mongoose from 'mongoose';
 import { Router, Response } from 'express';
 import { db } from '../store/memoryStore';
 import { authenticateJwt, requireRoles, requireApprovedOwner, AuthenticatedRequest } from '../middleware/auth.middleware';
+import { UserModel } from '../models/mongodb.models';
 
 const router = Router();
 
 // Submit Owner Verification Application (Requires OWNER role)
-router.post('/apply', authenticateJwt, requireRoles(['OWNER']), (req: AuthenticatedRequest, res: Response) => {
+router.post('/apply', authenticateJwt, requireRoles(['OWNER']), async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user!.id;
   const { businessName, documents } = req.body;
 
@@ -32,6 +34,29 @@ router.post('/apply', authenticateJwt, requireRoles(['OWNER']), (req: Authentica
       url: doc.url,
       verified: false
     }));
+  }
+
+  // Update user KYC documents & status in MongoDB Compass
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const panDoc = documents?.find((d: any) => d.type === 'PAN_CARD')?.url;
+      const aadhaarDoc = documents?.find((d: any) => d.type === 'AADHAAR')?.url;
+      const deedDoc = documents?.find((d: any) => d.type === 'PROPERTY_DEED')?.url;
+      await UserModel.findOneAndUpdate(
+        { email: req.user!.email },
+        {
+          ownerStatus: 'UNDER_REVIEW',
+          kycDocuments: {
+            panCardUrl: panDoc,
+            aadhaarUrl: aadhaarDoc,
+            propertyDeedUrl: deedDoc
+          }
+        },
+        { returnDocument: 'after' }
+      );
+    } catch (mongoErr) {
+      console.warn('MongoDB sync note in owner apply:', mongoErr);
+    }
   }
 
   res.json({

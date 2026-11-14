@@ -59,8 +59,8 @@ router.post('/', authenticateJwt, (req: AuthenticatedRequest, res: Response) => 
 
   // Critical Invariant: Atomic bed status check to prevent double bookings
   if (bed.status !== 'AVAILABLE') {
-    return res.status(409).json({ 
-      error: `Bed ${bed.bedCode} is already ${bed.status}. Please select another bed.` 
+    return res.status(409).json({
+      error: `Bed ${bed.bedCode} is already ${bed.status}. Please select another bed.`
     });
   }
 
