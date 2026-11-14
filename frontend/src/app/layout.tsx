@@ -23,19 +23,31 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               window.addEventListener('error', function(e) {
-                if (e.filename && (e.filename.includes('chrome-extension://') || e.filename.includes('moz-extension://'))) {
+                if (e.filename && (
+                  e.filename.includes('extension://') || 
+                  e.filename.includes('safari-web-extension://') || 
+                  e.filename.includes('safari-extension://') || 
+                  e.filename.includes('chrome-extension://') || 
+                  e.filename.includes('moz-extension://')
+                )) {
                   e.stopImmediatePropagation();
                 }
               }, true);
               window.addEventListener('unhandledrejection', function(e) {
-                if (e.reason && e.reason.stack && (e.reason.stack.includes('chrome-extension://') || e.reason.stack.includes('moz-extension://'))) {
+                if (e.reason && e.reason.stack && (
+                  e.reason.stack.includes('extension://') || 
+                  e.reason.stack.includes('safari-web-extension://') || 
+                  e.reason.stack.includes('safari-extension://') || 
+                  e.reason.stack.includes('chrome-extension://') || 
+                  e.reason.stack.includes('moz-extension://')
+                )) {
                   e.stopImmediatePropagation();
                 }
               }, true);
             `,
           }}
         />
-        <Script src="https://accounts.google.com/gsi/client" strategy="beforeInteractive" />
+        <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
       </head>
       <body className="antialiased bg-slate-50 text-slate-900">{children}</body>
     </html>
