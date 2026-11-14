@@ -19,6 +19,22 @@ export default function RootLayout({
   const content = (
     <html lang="en">
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.addEventListener('error', function(e) {
+                if (e.filename && (e.filename.includes('chrome-extension://') || e.filename.includes('moz-extension://'))) {
+                  e.stopImmediatePropagation();
+                }
+              }, true);
+              window.addEventListener('unhandledrejection', function(e) {
+                if (e.reason && e.reason.stack && (e.reason.stack.includes('chrome-extension://') || e.reason.stack.includes('moz-extension://'))) {
+                  e.stopImmediatePropagation();
+                }
+              }, true);
+            `,
+          }}
+        />
         <Script src="https://accounts.google.com/gsi/client" strategy="beforeInteractive" />
       </head>
       <body className="antialiased bg-slate-50 text-slate-900">{children}</body>
@@ -29,6 +45,8 @@ export default function RootLayout({
     return (
       <ClerkProvider
         publishableKey={clerkKey}
+        clerkJSUrl="https://verified-racer-9830.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js"
+        clerkJSVersion="6"
         signInUrl="/sign-in"
         signUpUrl="/sign-up"
         afterSignInUrl="/"

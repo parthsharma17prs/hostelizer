@@ -9,12 +9,13 @@ const isPublicRoute = createRouteMatcher([
   '/',
   '/sign-in(.*)',
   '/sign-up(.*)',
+  '/dashboard(.*)',
   '/api(.*)'
 ]);
 
-const handler = clerkMiddleware((auth, request) => {
+const handler = clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {
-    auth().protect();
+    await auth.protect();
   }
 });
 

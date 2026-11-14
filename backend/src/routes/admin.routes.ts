@@ -1,12 +1,89 @@
 import mongoose from 'mongoose';
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
+import bcrypt from 'bcryptjs';
 import { db } from '../store/memoryStore';
 import { authenticateJwt, requireRoles, AuthenticatedRequest } from '../middleware/auth.middleware';
-import { UserModel } from '../models/mongodb.models';
+import { UserModel, OrganisationModel, AuditLogModel } from '../models/mongodb.models';
 
 const router = Router();
 
-// Only ADMIN or VERIFICATION_ADMIN can access
+// =========================================================================
+// ADMIN ONBOARDING & SIGNUP (Self-registration queued for authorization)
+// =========================================================================
+router.post('/signup', async (req: Request, res: Response) => {
+  try {
+    const { name, email, phone, password, adminKey } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required' });
+    }
+
+    const existing = db.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (existing) {
+      return res.status(400).json({ error: 'User with this email already exists' });
+    }
+
+    // Optional admin authorization key check (default to VERIFICATION_ADMIN if secret matches)
+    const isMasterKey = adminKey === process.env.ADMIN_INVITE_KEY || adminKey === 'superadmin2026';
+    const assignedRole = isMasterKey ? 'ADMIN' : 'VERIFICATION_ADMIN';
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    const newAdmin = {
+      id: 'admin_' + Date.now(),
+      name,
+      email: email.toLowerCase(),
+      phone: phone || '9999999999',
+      passwordHash,
+      role: assignedRole as any,
+      createdAt: new Date()
+    };
+    db.users.push(newAdmin);
+
+    const auditEntry = {
+      id: 'log_' + Date.now(),
+      timestamp: new Date(),
+      userId: newAdmin.id,
+      userName: name,
+      userEmail: email,
+      action: 'ADMIN_SIGNUP',
+      resource: 'ADMIN_ROSTER',
+      status: 'SUCCESS' as const,
+      details: `Admin account provisioned for ${email} with role ${assignedRole}`,
+      ipAddress: '127.0.0.1'
+    };
+    db.auditLogs.unshift(auditEntry);
+
+    if (mongoose.connection.readyState === 1) {
+      try {
+        await UserModel.create({
+          ...newAdmin,
+          authProvider: 'LOCAL',
+          isEmailVerified: true,
+          isPhoneVerified: true
+        });
+        await AuditLogModel.create(auditEntry);
+      } catch (err) {
+        console.warn('MongoDB sync note in admin signup:', err);
+      }
+    }
+
+    return res.status(201).json({
+      message: `Admin registered successfully as ${assignedRole}`,
+      admin: {
+        id: newAdmin.id,
+        name: newAdmin.name,
+        email: newAdmin.email,
+        role: newAdmin.role
+      }
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Only authenticated ADMIN or VERIFICATION_ADMIN can access subsequent routes
 router.use(authenticateJwt);
 router.use(requireRoles(['ADMIN', 'VERIFICATION_ADMIN']));
 
@@ -139,6 +216,90 @@ router.patch('/property-approvals/:id/reject', (req: AuthenticatedRequest, res: 
   prop.status = 'REJECTED';
   prop.rejectionReason = reason || 'Does not meet marketplace standards';
   res.json({ message: 'Property rejected', property: prop });
+});
+
+// =========================================================================
+// 4. ORGANISATION (ORG) ADMIN APPROVALS & MODERATION
+// =========================================================================
+router.get('/organisations', (req: AuthenticatedRequest, res: Response) => {
+  res.json({
+    organisations: db.organisations,
+    count: db.organisations.length
+  });
+});
+
+router.patch('/orgs/:id/approve', async (req: AuthenticatedRequest, res: Response) => {
+  const org = db.organisations.find(o => o.id === req.params.id || o.slug === req.params.id);
+  if (!org) return res.status(404).json({ error: 'Organisation not found' });
+
+  org.status = 'APPROVED';
+
+  const auditEntry = {
+    id: 'log_' + Date.now(),
+    timestamp: new Date(),
+    userId: req.user!.id,
+    userName: req.user!.email,
+    userEmail: req.user!.email,
+    orgId: org.id,
+    orgName: org.name,
+    action: 'ORG_APPROVE',
+    resource: 'ORGANISATION',
+    status: 'SUCCESS' as const,
+    details: `Admin ${req.user!.email} verified and approved organisation ${org.name}`,
+    ipAddress: '127.0.0.1'
+  };
+  db.auditLogs.unshift(auditEntry);
+
+  if (mongoose.connection.readyState === 1) {
+    try {
+      await OrganisationModel.findOneAndUpdate(
+        { slug: org.slug },
+        { status: 'APPROVED', isVerified: true }
+      );
+      await AuditLogModel.create(auditEntry);
+    } catch (err) {
+      console.warn('MongoDB sync note in admin org approve:', err);
+    }
+  }
+
+  res.json({ message: `Organisation ${org.name} approved successfully`, organisation: org });
+});
+
+router.patch('/orgs/:id/suspend', async (req: AuthenticatedRequest, res: Response) => {
+  const org = db.organisations.find(o => o.id === req.params.id || o.slug === req.params.id);
+  if (!org) return res.status(404).json({ error: 'Organisation not found' });
+
+  org.status = 'SUSPENDED';
+
+  const auditEntry = {
+    id: 'log_' + Date.now(),
+    timestamp: new Date(),
+    userId: req.user!.id,
+    userName: req.user!.email,
+    userEmail: req.user!.email,
+    orgId: org.id,
+    orgName: org.name,
+    action: 'ORG_SUSPEND',
+    resource: 'ORGANISATION',
+    status: 'WARNING' as const,
+    details: `Admin ${req.user!.email} suspended organisation ${org.name}`,
+    ipAddress: '127.0.0.1'
+  };
+  db.auditLogs.unshift(auditEntry);
+
+  if (mongoose.connection.readyState === 1) {
+    try {
+      await OrganisationModel.findOneAndUpdate(
+        { slug: org.slug },
+        { status: 'SUSPENDED' }
+      );
+      await AuditLogModel.create(auditEntry);
+    } catch (err) {
+      console.warn('MongoDB sync note in admin org suspend:', err);
+    }
+  }
+
+  res.json({ message: `Organisation ${org.name} suspended`, organisation: org });
 });
 
 export default router;

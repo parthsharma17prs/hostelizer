@@ -10,7 +10,51 @@ export interface DBUser {
   role: 'CUSTOMER' | 'OWNER' | 'ADMIN' | 'VERIFICATION_ADMIN';
   authProvider?: 'LOCAL' | 'GOOGLE' | 'OTP';
   ownerStatus?: 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED' | 'SUSPENDED';
+  orgId?: string;
+  orgRole?: 'ORG_ADMIN' | 'ORG_MANAGER' | 'ORG_STAFF';
+  isArchived?: boolean;
+  jobTitle?: string;
+  maskedAadhaar?: string;
+  maskedPan?: string;
   createdAt: Date;
+}
+
+export interface DBOrganisationMember {
+  userId: string;
+  name: string;
+  email: string;
+  role: 'ORG_ADMIN' | 'ORG_MANAGER' | 'ORG_STAFF';
+  joinedAt: Date;
+}
+
+export interface DBOrganisation {
+  id: string;
+  name: string;
+  slug: string;
+  legalName: string;
+  panNumber: string;
+  gstNumber?: string;
+  ownerId: string;
+  status: 'PENDING' | 'APPROVED' | 'SUSPENDED' | 'ARCHIVED';
+  members: DBOrganisationMember[];
+  address: string;
+  city: string;
+  createdAt: Date;
+}
+
+export interface DBAuditLog {
+  id: string;
+  timestamp: Date;
+  userId?: string;
+  userName?: string;
+  userEmail?: string;
+  orgId?: string;
+  orgName?: string;
+  action: string;
+  resource: string;
+  status: 'SUCCESS' | 'FAILURE' | 'WARNING';
+  details?: string;
+  ipAddress?: string;
 }
 
 export interface DBOwnerProfile {
@@ -26,6 +70,7 @@ export interface DBOwnerProfile {
 
 export interface DBProperty {
   id: string;
+  orgId?: string;
   ownerProfileId: string;
   name: string;
   description: string;
@@ -109,12 +154,106 @@ class MemoryStore {
   bookings: DBBooking[] = [];
   visits: DBVisit[] = [];
   leads: DBLead[] = [];
+  organisations: DBOrganisation[] = [];
+  auditLogs: DBAuditLog[] = [];
 
   constructor() {
     this.seedDefaultData();
   }
 
   private seedDefaultData() {
+    // Seed Organisations
+    this.organisations.push({
+      id: 'org-alpha',
+      name: 'Apex Living Networks',
+      slug: 'apex-living',
+      legalName: 'Apex Living Technologies Pvt Ltd',
+      panNumber: 'AAACA1234A',
+      gstNumber: '23AAACA1234A1Z5',
+      ownerId: 'owner-1',
+      status: 'APPROVED',
+      address: 'Plot 42, Scheme 54, Vijay Nagar, Indore',
+      city: 'Indore',
+      members: [
+        {
+          userId: 'owner-1',
+          name: 'Rajesh Sharma',
+          email: 'rajesh@sunrisehostels.com',
+          role: 'ORG_ADMIN',
+          joinedAt: new Date(Date.now() - 30 * 86400000)
+        }
+      ],
+      createdAt: new Date(Date.now() - 30 * 86400000)
+    });
+
+    this.organisations.push({
+      id: 'org-beta',
+      name: 'Horizon Student Residencies',
+      slug: 'horizon-residencies',
+      legalName: 'Horizon Co-Living Hospitality LLP',
+      panNumber: 'BBBCB5678B',
+      gstNumber: '29BBBCB5678B1Z2',
+      ownerId: 'admin-1',
+      status: 'APPROVED',
+      address: '88 Cyber Hub, DLF Phase 2, Gurgaon',
+      city: 'Gurgaon',
+      members: [
+        {
+          userId: 'admin-1',
+          name: 'Super Admin',
+          email: 'admin@hostelizer.com',
+          role: 'ORG_ADMIN',
+          joinedAt: new Date(Date.now() - 20 * 86400000)
+        }
+      ],
+      createdAt: new Date(Date.now() - 20 * 86400000)
+    });
+
+    // Seed Audit Logs
+    this.auditLogs.push(
+      {
+        id: 'log-1',
+        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
+        userId: 'admin-1',
+        userName: 'Super Admin',
+        userEmail: 'admin@hostelizer.com',
+        orgId: 'org-alpha',
+        orgName: 'Apex Living Networks',
+        action: 'ORG_APPROVE',
+        resource: 'ORGANISATION',
+        status: 'SUCCESS',
+        details: 'Approved KYC dossier and registered Apex Living Networks',
+        ipAddress: '127.0.0.1'
+      },
+      {
+        id: 'log-2',
+        timestamp: new Date(Date.now() - 1000 * 60 * 30),
+        userId: 'owner-1',
+        userName: 'Rajesh Sharma',
+        userEmail: 'rajesh@sunrisehostels.com',
+        orgId: 'org-alpha',
+        orgName: 'Apex Living Networks',
+        action: 'LOGIN',
+        resource: 'SESSION',
+        status: 'SUCCESS',
+        details: 'User authenticated via password',
+        ipAddress: '127.0.0.1'
+      },
+      {
+        id: 'log-3',
+        timestamp: new Date(Date.now() - 1000 * 60 * 10),
+        userId: 'owner-1',
+        userName: 'Rajesh Sharma',
+        userEmail: 'rajesh@sunrisehostels.com',
+        orgId: 'org-alpha',
+        orgName: 'Apex Living Networks',
+        action: 'DOC_UPLOAD',
+        resource: 'KYC_DOCUMENTS',
+        status: 'SUCCESS',
+        details: 'Uploaded PAN and Aadhaar identity verification assets',
+        ipAddress: '127.0.0.1'
+      }
+    );
     // Seed Admin
     this.users.push({
       id: 'admin-1',

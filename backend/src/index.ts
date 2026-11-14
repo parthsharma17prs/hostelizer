@@ -14,6 +14,8 @@ import aiRoutes from './routes/ai.routes';
 import studioRoutes from './routes/studio.routes';
 import assetRoutes from './routes/asset.routes';
 import operationsRoutes from './routes/operations.routes';
+import orgRoutes from './routes/org.routes';
+import logRoutes from './routes/log.routes';
 import { initializeSocketChat } from './sockets/chat.socket';
 import { connectMongo } from './models/mongoInit';
 
@@ -55,6 +57,9 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/studio', studioRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/operations', operationsRoutes);
+app.use('/api/orgs', orgRoutes);
+app.use('/api/log', logRoutes);
+app.use('/api/logs', logRoutes);
 
 // Socket.io real-time chat initialization
 initializeSocketChat(io);

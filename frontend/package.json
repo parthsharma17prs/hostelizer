@@ -10,7 +10,7 @@
     "vite:build": "vite build"
   },
   "dependencies": {
-    "@clerk/nextjs": "^5.7.5",
+    "@clerk/nextjs": "^6.12.0",
     "lucide-react": "^0.379.0",
     "next": "14.2.15",
     "react": "^18.3.1",

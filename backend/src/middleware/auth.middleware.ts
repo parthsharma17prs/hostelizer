@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+import { db } from '../store/memoryStore';
 
 export interface AuthUser {
   id: string;
@@ -48,9 +49,14 @@ export const requireApprovedOwner = (req: AuthenticatedRequest, res: Response, n
   if (!req.user || req.user.role !== 'OWNER') {
     return res.status(403).json({ error: 'Only owners can access this endpoint' });
   }
-  if (req.user.ownerStatus !== 'APPROVED') {
+
+  // Live revocation and status verification check
+  const liveProfile = db.ownerProfiles.find(p => p.userId === req.user!.id);
+  const liveStatus = liveProfile ? liveProfile.status : req.user.ownerStatus;
+
+  if (liveStatus !== 'APPROVED') {
     return res.status(403).json({
-      error: `Owner account is ${req.user.ownerStatus || 'PENDING'}. Approved verification is required.`
+      error: `Owner account is ${liveStatus || 'PENDING'}. Approved verification is required.`
     });
   }
   next();

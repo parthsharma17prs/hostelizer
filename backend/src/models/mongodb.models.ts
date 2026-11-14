@@ -13,9 +13,18 @@ export interface IUser extends Document {
   isPhoneVerified: boolean;
   role: 'CUSTOMER' | 'OWNER' | 'ADMIN' | 'VERIFICATION_ADMIN';
   ownerStatus?: 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
+  orgId?: string;
+  isArchived?: boolean;
+  jobProfile?: {
+    title?: string;
+    company?: string;
+    isVerified?: boolean;
+  };
   kycDocuments?: {
     panCardUrl?: string;
     aadhaarUrl?: string;
+    maskedPan?: string;
+    maskedAadhaar?: string;
     propertyDeedUrl?: string;
     verifiedAt?: Date;
   };
@@ -35,9 +44,18 @@ const UserSchema = new Schema<IUser>({
   isPhoneVerified: { type: Boolean, default: false },
   role: { type: String, enum: ['CUSTOMER', 'OWNER', 'ADMIN', 'VERIFICATION_ADMIN'], default: 'CUSTOMER' },
   ownerStatus: { type: String, enum: ['PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'], default: 'APPROVED' },
+  orgId: { type: String },
+  isArchived: { type: Boolean, default: false },
+  jobProfile: {
+    title: String,
+    company: String,
+    isVerified: { type: Boolean, default: false }
+  },
   kycDocuments: {
     panCardUrl: String,
     aadhaarUrl: String,
+    maskedPan: String,
+    maskedAadhaar: String,
     propertyDeedUrl: String,
     verifiedAt: Date
   },
@@ -337,5 +355,92 @@ const NoticeBoardSchema = new Schema<INoticeBoard>({
 });
 
 export const NoticeBoardModel = mongoose.models.NoticeBoard || mongoose.model<INoticeBoard>('NoticeBoard', NoticeBoardSchema);
+
+// 11. Multi-Tenant Organisation (ORG) Schema
+export interface IOrganisationMember {
+  userId: string;
+  name: string;
+  email: string;
+  role: 'ORG_ADMIN' | 'ORG_MANAGER' | 'ORG_STAFF';
+  joinedAt: Date;
+}
+
+export interface IOrganisation extends Document {
+  name: string;
+  slug: string;
+  legalName: string;
+  registrationNumber?: string;
+  panNumber?: string;
+  gstNumber?: string;
+  ownerId: string;
+  status: 'PENDING' | 'APPROVED' | 'SUSPENDED' | 'ARCHIVED';
+  members: IOrganisationMember[];
+  domain?: string;
+  address: string;
+  city: string;
+  isVerified: boolean;
+  createdAt: Date;
+}
+
+const OrganisationSchema = new Schema<IOrganisation>({
+  name: { type: String, required: true },
+  slug: { type: String, required: true, unique: true },
+  legalName: { type: String, required: true },
+  registrationNumber: { type: String },
+  panNumber: { type: String },
+  gstNumber: { type: String },
+  ownerId: { type: String, required: true },
+  status: { 
+    type: String, 
+    enum: ['PENDING', 'APPROVED', 'SUSPENDED', 'ARCHIVED'], 
+    default: 'PENDING' 
+  },
+  members: [{
+    userId: { type: String, required: true },
+    name: { type: String, required: true },
+    email: { type: String, required: true },
+    role: { type: String, enum: ['ORG_ADMIN', 'ORG_MANAGER', 'ORG_STAFF'], default: 'ORG_STAFF' },
+    joinedAt: { type: Date, default: Date.now }
+  }],
+  domain: { type: String },
+  address: { type: String, required: true },
+  city: { type: String, required: true },
+  isVerified: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
+
+export const OrganisationModel = mongoose.models.Organisation || mongoose.model<IOrganisation>('Organisation', OrganisationSchema);
+
+// 12. System Audit & Activity Logs Schema (/log, /dashboard/logs)
+export interface IAuditLog extends Document {
+  timestamp: Date;
+  userId?: string;
+  userName?: string;
+  userEmail?: string;
+  orgId?: string;
+  orgName?: string;
+  action: string;
+  resource: string;
+  status: 'SUCCESS' | 'FAILURE' | 'WARNING';
+  ipAddress?: string;
+  details?: string;
+}
+
+const AuditLogSchema = new Schema<IAuditLog>({
+  timestamp: { type: Date, default: Date.now, index: true },
+  userId: { type: String },
+  userName: { type: String },
+  userEmail: { type: String },
+  orgId: { type: String, index: true },
+  orgName: { type: String },
+  action: { type: String, required: true, index: true },
+  resource: { type: String, required: true },
+  status: { type: String, enum: ['SUCCESS', 'FAILURE', 'WARNING'], default: 'SUCCESS' },
+  ipAddress: { type: String, default: '127.0.0.1' },
+  details: { type: String }
+});
+
+export const AuditLogModel = mongoose.models.AuditLog || mongoose.model<IAuditLog>('AuditLog', AuditLogSchema);
+
 
 
