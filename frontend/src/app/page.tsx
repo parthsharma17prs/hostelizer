@@ -25,15 +25,37 @@ export default function LoginPage() {
     setError(null);
     setGoogleLoading(true);
 
-    if (!isSignInLoaded || !signIn) {
-      setError('Authentication system is initializing. Please click again in a second.');
+    let activeSignIn = signIn;
+    let activeSignUp = signUp;
+
+    // Check window.Clerk directly if React hook is still settling
+    if (!activeSignIn && typeof window !== 'undefined' && (window as any).Clerk) {
+      activeSignIn = (window as any).Clerk.client?.signIn;
+      activeSignUp = (window as any).Clerk.client?.signUp;
+    }
+
+    // Brief poll if user clicks immediately upon page load
+    if (!activeSignIn) {
+      let attempts = 0;
+      while (!activeSignIn && attempts < 10) {
+        await new Promise((r) => setTimeout(r, 150));
+        if (typeof window !== 'undefined' && (window as any).Clerk) {
+          activeSignIn = (window as any).Clerk.client?.signIn;
+          activeSignUp = (window as any).Clerk.client?.signUp;
+        }
+        attempts++;
+      }
+    }
+
+    if (!activeSignIn) {
+      setError('Authentication system is connecting to Clerk. Please click again.');
       setGoogleLoading(false);
       return;
     }
 
     try {
       // 1. Direct Google OAuth redirect via Clerk
-      await signIn.authenticateWithRedirect({
+      await activeSignIn.authenticateWithRedirect({
         strategy: 'oauth_google',
         redirectUrl: '/sso-callback',
         redirectUrlComplete: '/apply-approval',
@@ -42,9 +64,9 @@ export default function LoginPage() {
       console.warn('Google sign-in attempt failed, falling back to sign-up redirect:', signInErr);
       
       // 2. If user needs to register first, execute sign-up OAuth redirect
-      if (signUp && isSignUpLoaded) {
+      if (activeSignUp) {
         try {
-          await signUp.authenticateWithRedirect({
+          await activeSignUp.authenticateWithRedirect({
             strategy: 'oauth_google',
             redirectUrl: '/sso-callback',
             redirectUrlComplete: '/apply-approval',
