@@ -6,10 +6,11 @@ import {
   Building2, ShieldCheck, CheckCircle2, ArrowRight, 
   AlertCircle, Loader2, Activity, Lock, Mail, LogOut
 } from 'lucide-react';
-import { useSignIn, useUser, useClerk } from '@clerk/nextjs';
+import { useSignIn, useSignUp, useUser, useClerk } from '@clerk/nextjs';
 
 export default function LoginPage() {
   const { isLoaded: isSignInLoaded, signIn } = useSignIn();
+  const { isLoaded: isSignUpLoaded, signUp } = useSignUp();
   const { isLoaded: isUserLoaded, isSignedIn, user } = useUser();
   const { signOut } = useClerk();
 
@@ -25,21 +26,40 @@ export default function LoginPage() {
     setGoogleLoading(true);
 
     if (!isSignInLoaded || !signIn) {
-      // Direct navigation to Clerk sign-in if SDK is still loading
-      window.location.href = '/sign-in';
+      setError('Authentication system is initializing. Please click again in a second.');
+      setGoogleLoading(false);
       return;
     }
 
     try {
+      // 1. Direct Google OAuth redirect via Clerk
       await signIn.authenticateWithRedirect({
         strategy: 'oauth_google',
         redirectUrl: '/sso-callback',
         redirectUrlComplete: '/apply-approval',
       });
-    } catch (err: any) {
-      // If error occurs, fallback cleanly to the dedicated sign-in page
-      console.error('Google OAuth initialization error:', err);
-      window.location.href = '/sign-in';
+    } catch (signInErr: any) {
+      console.warn('Google sign-in attempt failed, falling back to sign-up redirect:', signInErr);
+      
+      // 2. If user needs to register first, execute sign-up OAuth redirect
+      if (signUp && isSignUpLoaded) {
+        try {
+          await signUp.authenticateWithRedirect({
+            strategy: 'oauth_google',
+            redirectUrl: '/sso-callback',
+            redirectUrlComplete: '/apply-approval',
+          });
+          return;
+        } catch (signUpErr: any) {
+          console.error('Google sign-up attempt error:', signUpErr);
+          setError(signUpErr?.errors?.[0]?.message || 'Google authentication encountered an error.');
+          setGoogleLoading(false);
+          return;
+        }
+      }
+
+      setError(signInErr?.errors?.[0]?.message || 'Google authentication failed. Please try again.');
+      setGoogleLoading(false);
     }
   };
 
