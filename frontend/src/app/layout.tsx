@@ -57,11 +57,11 @@ export default function RootLayout({
     return (
       <ClerkProvider
         publishableKey={clerkKey}
-        clerkJSUrl="https://verified-racer-9830.clerk.accounts.dev/npm/@clerk/clerk-js@6/dist/clerk.browser.js"
-        clerkJSVersion="6"
         signInUrl="/sign-in"
         signUpUrl="/sign-up"
-        afterSignInUrl="/"
+        signInFallbackRedirectUrl="/apply-approval"
+        signUpFallbackRedirectUrl="/apply-approval"
+        afterSignInUrl="/apply-approval"
         afterSignUpUrl="/apply-approval"
       >
         {content}

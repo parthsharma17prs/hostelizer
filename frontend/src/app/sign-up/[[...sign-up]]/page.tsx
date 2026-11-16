@@ -30,6 +30,7 @@ export default function SignUpPage() {
             path="/sign-up" 
             signInUrl="/sign-in"
             fallbackRedirectUrl="/apply-approval"
+            forceRedirectUrl="/apply-approval"
           />
         ) : (
           <div className="p-8 max-w-sm text-center space-y-4">

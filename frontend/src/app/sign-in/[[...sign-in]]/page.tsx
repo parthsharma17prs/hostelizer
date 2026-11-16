@@ -29,7 +29,8 @@ export default function SignInPage() {
             routing="path" 
             path="/sign-in" 
             signUpUrl="/sign-up"
-            fallbackRedirectUrl="/"
+            fallbackRedirectUrl="/apply-approval"
+            forceRedirectUrl="/apply-approval"
           />
         ) : (
           <div className="p-8 max-w-sm text-center space-y-4">
