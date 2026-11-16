@@ -13,6 +13,8 @@ const isPublicRoute = createRouteMatcher([
   '/apply-approval(.*)',
   '/apply-doc(.*)',
   '/dashboard(.*)',
+  '/orgs(.*)',
+  '/admin(.*)',
   '/api(.*)'
 ]);
 

@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   Building2, ShieldCheck, CheckCircle2, ArrowRight, 
-  AlertCircle, Loader2, Activity, Lock, Mail, LogOut
+  AlertCircle, Loader2, Activity, Lock, Mail, LogOut,
+  Phone, Smartphone, KeyRound, Building, RefreshCw
 } from 'lucide-react';
 import { useSignIn, useSignUp, useUser, useClerk } from '@clerk/nextjs';
 
@@ -14,11 +15,34 @@ export default function LoginPage() {
   const { isLoaded: isUserLoaded, isSignedIn, user } = useUser();
   const { signOut } = useClerk();
 
+  // Mode: Password vs SMS OTP
+  const [authMode, setAuthMode] = useState<'PASSWORD' | 'OTP'>('PASSWORD');
+
+  // Password Login State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // OTP Login State
+  const [phoneOrEmail, setPhoneOrEmail] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001';
+
+  // Countdown timer for OTP resend cooldown
+  useEffect(() => {
+    let timer: any;
+    if (countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [countdown]);
 
   // Real Google OAuth Handler (via Clerk)
   const handleGoogleSignIn = async () => {
@@ -54,7 +78,6 @@ export default function LoginPage() {
     }
 
     try {
-      // 1. Direct Google OAuth redirect via Clerk
       await activeSignIn.authenticateWithRedirect({
         strategy: 'oauth_google',
         redirectUrl: '/sso-callback',
@@ -63,7 +86,6 @@ export default function LoginPage() {
     } catch (signInErr: any) {
       console.warn('Google sign-in attempt failed, falling back to sign-up redirect:', signInErr);
       
-      // 2. If user needs to register first, execute sign-up OAuth redirect
       if (activeSignUp) {
         try {
           await activeSignUp.authenticateWithRedirect({
@@ -73,7 +95,6 @@ export default function LoginPage() {
           });
           return;
         } catch (signUpErr: any) {
-          console.error('Google sign-up attempt error:', signUpErr);
           setError(signUpErr?.errors?.[0]?.message || 'Google authentication encountered an error.');
           setGoogleLoading(false);
           return;
@@ -97,7 +118,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password: password.trim() }),
@@ -118,6 +139,85 @@ export default function LoginPage() {
     }
   };
 
+  // 1. Send OTP (Twilio Real SMS or Email)
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phoneOrEmail.trim()) {
+      setError('Please enter a mobile phone number or email address');
+      return;
+    }
+
+    setError(null);
+    setSuccessMsg(null);
+    setOtpLoading(true);
+
+    try {
+      const isEmail = phoneOrEmail.includes('@');
+      const res = await fetch(`${API_URL}/api/auth/otp/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier: phoneOrEmail.trim(),
+          channel: isEmail ? 'EMAIL' : 'SMS'
+        })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setOtpSent(true);
+        setCountdown(30); // 30s resend cooldown
+        setSuccessMsg(
+          data.demoOtp 
+            ? `Verification code dispatched! (Demo OTP: ${data.demoOtp})`
+            : `Verification code sent via ${data.channel || 'SMS'}. Valid for 5 minutes.`
+        );
+      } else {
+        setError(data.error || 'Failed to dispatch verification code');
+      }
+    } catch (err: any) {
+      setError('Unable to reach verification service');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  // 2. Verify OTP and Authenticate Session
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpCode.trim() || otpCode.trim().length !== 6) {
+      setError('Please enter the 6-digit verification code');
+      return;
+    }
+
+    setError(null);
+    setOtpLoading(true);
+
+    try {
+      const res = await fetch(`${API_URL}/api/auth/otp/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier: phoneOrEmail.trim(),
+          otp: otpCode.trim()
+        })
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.token) {
+        localStorage.setItem('hostelizer_token', data.token);
+        window.location.href = '/apply-approval';
+      } else {
+        setError(data.error || 'Invalid or expired verification code');
+      }
+    } catch (err: any) {
+      setError('Unable to complete OTP verification');
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col justify-between">
       {/* Top Navigation Bar */}
@@ -133,13 +233,29 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <Link
+              href="/orgs"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition"
+            >
+              <Building className="w-3.5 h-3.5 text-slate-600" />
+              <span className="hidden sm:inline">ORG Manager</span>
+            </Link>
+
+            <Link
+              href="/admin"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-lg transition"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="hidden sm:inline">Admin Console</span>
+            </Link>
+
             <Link
               href="/dashboard/logs"
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg transition"
             >
               <Activity className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Security Logs (/dashboard/logs)</span>
+              <span className="hidden sm:inline">Security Logs</span>
             </Link>
 
             {isUserLoaded && isSignedIn && (
@@ -160,11 +276,12 @@ export default function LoginPage() {
       </header>
 
       {/* Main Authentication Card */}
-      <main className="flex-1 flex flex-col justify-center items-center px-4 py-12">
-        <div className="max-w-md w-full bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
+      <main className="flex-1 flex flex-col justify-center items-center px-4 py-10">
+        <div className="max-w-md w-full bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xl space-y-5">
+          
           {/* Header */}
           <div className="text-center space-y-1">
-            <div className="inline-flex items-center justify-center p-2.5 bg-emerald-50 rounded-xl mb-1 border border-emerald-100">
+            <div className="inline-flex items-center justify-center p-2.5 bg-emerald-50 rounded-2xl mb-1 border border-emerald-100">
               <Building2 className="w-7 h-7 text-emerald-600" />
             </div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Sign in to Hostelizer</h1>
@@ -173,7 +290,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Active Session Info (No Auto-Redirect) */}
+          {/* Active Session Info */}
           {isUserLoaded && isSignedIn && (
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-center justify-between gap-2">
               <div className="truncate">
@@ -210,6 +327,14 @@ export default function LoginPage() {
             </div>
           )}
 
+          {/* Success Banner */}
+          {successMsg && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 flex items-start gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="flex-1 font-medium">{successMsg}</div>
+            </div>
+          )}
+
           {/* 1. Google Auth Button */}
           <button
             type="button"
@@ -236,49 +361,148 @@ export default function LoginPage() {
               <div className="w-full border-t border-slate-200" />
             </div>
             <span className="relative bg-white px-2.5 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-              or sign in with email
+              or authenticate directly
             </span>
           </div>
 
-          {/* 2. ID (Email) & Password Form */}
-          <form onSubmit={handleEmailSignIn} className="space-y-3.5 text-xs">
-            <div>
-              <label className="block text-slate-700 font-medium mb-1">Email address</label>
-              <div className="relative">
+          {/* Authentication Mode Switcher: Password vs SMS OTP */}
+          <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-xl text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => { setAuthMode('PASSWORD'); setError(null); }}
+              className={`py-1.5 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                authMode === 'PASSWORD' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Email & Password</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setAuthMode('OTP'); setError(null); }}
+              className={`py-1.5 rounded-lg transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                authMode === 'OTP' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>Twilio SMS OTP</span>
+            </button>
+          </div>
+
+          {/* OPTION A: Email & Password Form */}
+          {authMode === 'PASSWORD' ? (
+            <form onSubmit={handleEmailSignIn} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block text-slate-700 font-medium mb-1">Business Email address</label>
                 <input
                   type="email"
                   required
                   placeholder="name@company.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-3 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white text-xs"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white text-xs"
                 />
               </div>
-            </div>
 
-            <div>
-              <label className="block text-slate-700 font-medium mb-1">Password</label>
-              <div className="relative">
+              <div>
+                <label className="block text-slate-700 font-medium mb-1">Password</label>
                 <input
                   type="password"
                   required
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-3 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white text-xs"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white text-xs"
                 />
               </div>
-            </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg transition text-xs shadow-sm cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
-            >
-              {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              <span>{loading ? 'Authenticating...' : 'Sign In'}</span>
-            </button>
-          </form>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg transition text-xs shadow-sm cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
+              >
+                {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{loading ? 'Authenticating...' : 'Sign In with Password'}</span>
+              </button>
+            </form>
+          ) : (
+            /* OPTION B: Twilio Real SMS OTP Form */
+            <div className="space-y-3.5 text-xs">
+              {!otpSent ? (
+                <form onSubmit={handleSendOtp} className="space-y-3">
+                  <div>
+                    <label className="block text-slate-700 font-medium mb-1">Mobile Number or Email</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="+91 98765 43210 or name@email.com"
+                      value={phoneOrEmail}
+                      onChange={(e) => setPhoneOrEmail(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white text-xs"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={otpLoading}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition text-xs shadow-sm cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
+                  >
+                    {otpLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Smartphone className="w-3.5 h-3.5" />}
+                    <span>Send Verification Code</span>
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyOtp} className="space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-slate-700 font-medium">Enter 6-Digit Code</label>
+                      <button
+                        type="button"
+                        onClick={() => { setOtpSent(false); setOtpCode(''); }}
+                        className="text-[11px] text-emerald-600 hover:underline cursor-pointer"
+                      >
+                        Change number
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      required
+                      placeholder="e.g. 516672"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white text-sm font-mono tracking-widest text-center"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={otpLoading}
+                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg transition text-xs shadow-sm cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
+                  >
+                    {otpLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+                    <span>Verify Code & Sign In</span>
+                  </button>
+
+                  <div className="text-center pt-1">
+                    {countdown > 0 ? (
+                      <span className="text-[11px] text-slate-400">
+                        Resend code in <span className="font-mono font-bold text-slate-600">{countdown}s</span>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleSendOtp}
+                        className="text-[11px] text-emerald-600 font-semibold hover:underline cursor-pointer"
+                      >
+                        Resend verification code
+                      </button>
+                    )}
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
 
           {/* 3. Sign Up Button / Link */}
           <div className="text-center pt-2 border-t border-slate-100">
