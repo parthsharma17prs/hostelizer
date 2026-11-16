@@ -1,6 +1,5 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import Script from 'next/script';
 import { ClerkProvider } from '@clerk/nextjs';
 
 export const metadata: Metadata = {
@@ -47,7 +46,6 @@ export default function RootLayout({
             `,
           }}
         />
-        <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
       </head>
       <body className="antialiased bg-slate-50 text-slate-900">{children}</body>
     </html>
