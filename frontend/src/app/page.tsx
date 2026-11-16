@@ -1,29 +1,23 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { 
   Building2, ShieldCheck, CheckCircle2, ArrowRight, 
-  AlertCircle, Loader2, Activity, Lock, Mail
+  AlertCircle, Loader2, Activity, Lock, Mail, LogOut
 } from 'lucide-react';
-import { useSignIn, useUser } from '@clerk/nextjs';
+import { useSignIn, useUser, useClerk } from '@clerk/nextjs';
 
 export default function LoginPage() {
   const { isLoaded: isSignInLoaded, signIn } = useSignIn();
   const { isLoaded: isUserLoaded, isSignedIn, user } = useUser();
+  const { signOut } = useClerk();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // If user is already signed in via Clerk, automatically route to KYC verification
-  useEffect(() => {
-    if (isUserLoaded && isSignedIn) {
-      window.location.href = '/apply-approval';
-    }
-  }, [isUserLoaded, isSignedIn]);
 
   // Real Google OAuth Handler (via Clerk)
   const handleGoogleSignIn = async () => {
@@ -105,6 +99,20 @@ export default function LoginPage() {
               <Activity className="w-3.5 h-3.5 text-emerald-600" />
               <span>Security Logs (/dashboard/logs)</span>
             </Link>
+
+            {isUserLoaded && isSignedIn && (
+              <button
+                type="button"
+                onClick={() => {
+                  signOut();
+                  localStorage.removeItem('hostelizer_token');
+                }}
+                className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-900 border border-slate-200 hover:bg-slate-100 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sign Out</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -122,6 +130,35 @@ export default function LoginPage() {
               Property management, verified listings & KYC compliance
             </p>
           </div>
+
+          {/* Active Session Info (No Auto-Redirect) */}
+          {isUserLoaded && isSignedIn && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-center justify-between gap-2">
+              <div className="truncate">
+                <span className="font-semibold block truncate">Logged in as {user?.primaryEmailAddress?.emailAddress}</span>
+                <span className="text-[10px] text-emerald-700">Active session</span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Link
+                  href="/apply-approval"
+                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded text-[11px] transition inline-flex items-center gap-1"
+                >
+                  <span>KYC Portal</span>
+                  <ArrowRight className="w-3 h-3" />
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    signOut();
+                    localStorage.removeItem('hostelizer_token');
+                  }}
+                  className="px-2 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-semibold rounded text-[11px] transition cursor-pointer"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Error Banner */}
           {error && (
