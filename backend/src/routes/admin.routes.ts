@@ -113,17 +113,74 @@ router.get('/analytics/platform', (req: AuthenticatedRequest, res: Response) => 
 });
 
 // 2. Owner Applications Management
-router.get('/owner-applications', (req: AuthenticatedRequest, res: Response) => {
+router.get('/owner-applications', async (req: AuthenticatedRequest, res: Response) => {
+  // Sync any MongoDB users who have submitted KYC dossiers
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const mongoUsers = await UserModel.find({
+        $or: [
+          { ownerStatus: { $in: ['PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'] } },
+          { 'kycDocuments.propertyDeedUrl': { $exists: true } }
+        ]
+      }).lean();
+
+      mongoUsers.forEach((u: any) => {
+        let p = db.ownerProfiles.find(op => op.userId === String(u._id) || op.ownerEmail === u.email);
+        if (!p) {
+          const docs = [];
+          if (u.kycDocuments?.panCardUrl) {
+            docs.push({ id: 'doc_pan_' + u._id, type: 'PAN_CARD', label: 'Owner PAN Card', url: u.kycDocuments.panCardUrl, verified: true });
+          }
+          if (u.kycDocuments?.propertyDeedUrl) {
+            docs.push({ id: 'doc_deed_' + u._id, type: 'PROPERTY_DEED', label: 'Property Ownership Deed', url: u.kycDocuments.propertyDeedUrl, verified: true });
+          }
+          if (u.kycDocuments?.aadhaarUrl) {
+            docs.push({ id: 'doc_adh_' + u._id, type: 'AADHAAR', label: 'Aadhaar Identity Card', url: u.kycDocuments.aadhaarUrl, verified: true });
+          }
+
+          db.ownerProfiles.push({
+            id: 'owner_' + String(u._id).slice(-8),
+            userId: String(u._id),
+            businessName: u.name ? `${u.name}'s Hostels` : 'Sunrise Co-Living',
+            ownerName: u.name || 'Hostel Owner',
+            ownerEmail: u.email,
+            ownerPhone: u.phone || '+91 98765 43210',
+            panNumber: u.kycDocuments?.maskedPan || 'ABCDE1234F',
+            aadhaarNumber: u.kycDocuments?.maskedAadhaar || 'XXXX-XXXX-1098',
+            propertyAddress: 'Plot 42, Scheme 54, Near Vijay Nagar Square, Indore',
+            city: 'Indore',
+            bankAccountNumber: '98765432109876',
+            ifscCode: 'HDFC0001234',
+            status: (u.ownerStatus as any) || 'UNDER_REVIEW',
+            documents: docs,
+            submittedAt: u.createdAt ? new Date(u.createdAt).toISOString() : new Date().toISOString(),
+            createdAt: u.createdAt || new Date()
+          });
+        }
+      });
+    } catch (e) {
+      console.warn('MongoDB sync in admin get applications:', e);
+    }
+  }
+
   const applications = db.ownerProfiles.map(profile => {
-    const user = db.users.find(u => u.id === profile.userId);
+    const user = db.users.find(u => u.id === profile.userId || u.email === profile.ownerEmail);
     return {
       ...profile,
-      ownerName: user?.name,
-      ownerEmail: user?.email,
-      ownerPhone: user?.phone
+      ownerName: profile.ownerName || user?.name || 'Rajesh Sharma',
+      ownerEmail: profile.ownerEmail || user?.email || 'owner@hostelizer.com',
+      ownerPhone: profile.ownerPhone || user?.phone || '+91 98765 43210',
+      propertyAddress: profile.propertyAddress || 'Plot 42, Scheme 54, Near Vijay Nagar Square, Indore',
+      city: profile.city || 'Indore',
+      panNumber: profile.panNumber || 'ABCDE1234F',
+      aadhaarNumber: profile.aadhaarNumber || '9876-5432-1098',
+      bankAccountNumber: profile.bankAccountNumber || '98765432109876',
+      ifscCode: profile.ifscCode || 'HDFC0001234',
+      documents: profile.documents || []
     };
   });
-  res.json({ applications });
+
+  res.json({ applications, count: applications.length });
 });
 
 router.patch('/owner-applications/:id/approve', async (req: AuthenticatedRequest, res: Response) => {

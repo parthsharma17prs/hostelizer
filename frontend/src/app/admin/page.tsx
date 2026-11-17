@@ -41,9 +41,16 @@ interface OwnerApplication {
   ownerEmail?: string;
   ownerPhone?: string;
   businessName: string;
+  propertyAddress?: string;
+  city?: string;
+  panNumber?: string;
+  aadhaarNumber?: string;
+  bankAccountNumber?: string;
+  ifscCode?: string;
   status: 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
   rejectionReason?: string;
-  documents: { id: string; type: string; url: string; verified: boolean }[];
+  documents: { id: string; type: string; label?: string; url: string; verified: boolean }[];
+  submittedAt?: string;
   createdAt: string;
 }
 
@@ -616,65 +623,120 @@ export default function AdminConsolePage() {
                   <span className="text-xs text-slate-500 font-mono">Count: {applications.length}</span>
                 </div>
 
-                <div className="space-y-3">
-                  {applications.map((app) => (
-                    <div key={app.id} className="p-4 border border-slate-200 rounded-2xl bg-slate-50/50 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                      <div className="space-y-1 text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-slate-900">{app.businessName}</span>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            app.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
-                            app.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
-                            'bg-amber-100 text-amber-800'
-                          }`}>
-                            {app.status}
-                          </span>
-                        </div>
-                        <div className="text-slate-500">
-                          Owner: <span className="text-slate-800 font-medium">{app.ownerName || 'Rajesh Sharma'}</span> &bull; {app.ownerEmail}
-                        </div>
-                        <div className="flex items-center gap-2 pt-1 text-[11px]">
-                          {app.documents?.map((doc, i) => (
-                            <a
-                              key={i}
-                              href={doc.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-indigo-600 hover:text-indigo-800 font-semibold inline-flex items-center gap-1 bg-white px-2 py-0.5 rounded border border-slate-200"
-                            >
-                              <span>{doc.type}</span>
-                              <ExternalLink className="w-2.5 h-2.5" />
-                            </a>
-                          ))}
-                        </div>
-                      </div>
+                <div className="space-y-4">
+                  {applications.length === 0 ? (
+                    <div className="text-center py-8 text-xs text-slate-400">
+                      No owner KYC applications in verification queue.
+                    </div>
+                  ) : (
+                    applications.map((app) => (
+                      <div key={app.id} className="p-5 border border-slate-200 rounded-3xl bg-slate-50/60 shadow-xs space-y-4">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-base text-slate-900">{app.businessName}</span>
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase ${
+                                app.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
+                                app.status === 'REJECTED' ? 'bg-red-100 text-red-800 border border-red-200' :
+                                'bg-amber-100 text-amber-800 border border-amber-200 animate-pulse'
+                              }`}>
+                                {app.status === 'UNDER_REVIEW' ? 'Under Review' : app.status}
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-slate-400 font-mono">App ID: {app.id} &bull; Submitted: {app.submittedAt ? new Date(app.submittedAt).toLocaleString() : 'Recent'}</span>
+                          </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        {app.status !== 'APPROVED' ? (
-                          <>
-                            <button
-                              onClick={() => handleRejectOwnerKyc(app.id)}
-                              className="px-3 py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded-lg text-xs font-semibold transition cursor-pointer"
-                            >
-                              Reject with Reason
-                            </button>
-                            <button
-                              onClick={() => handleApproveOwnerKyc(app.id)}
-                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer flex items-center gap-1"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Authorize KYC</span>
-                            </button>
-                          </>
-                        ) : (
-                          <span className="text-emerald-700 font-semibold text-xs flex items-center gap-1 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            <span>Authorized</span>
+                          <div className="flex items-center gap-2">
+                            {app.status !== 'APPROVED' ? (
+                              <>
+                                <button
+                                  onClick={() => handleRejectOwnerKyc(app.id)}
+                                  className="px-3.5 py-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-xs font-semibold transition cursor-pointer"
+                                >
+                                  Reject with Reason
+                                </button>
+                                <button
+                                  onClick={() => handleApproveOwnerKyc(app.id)}
+                                  className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>Authorize & Certify KYC</span>
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-emerald-700 font-semibold text-xs flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                <span>Verified & Certified Partner</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 4-Column Metadata Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                          <div className="bg-white p-3 rounded-xl border border-slate-200/80">
+                            <span className="text-slate-400 text-[10px] uppercase font-bold block">Owner Legal Name</span>
+                            <span className="font-semibold text-slate-900 mt-0.5 block">{app.ownerName || 'Rajesh Sharma'}</span>
+                            <span className="text-[11px] text-slate-500 font-mono">{app.ownerEmail}</span>
+                          </div>
+
+                          <div className="bg-white p-3 rounded-xl border border-slate-200/80">
+                            <span className="text-slate-400 text-[10px] uppercase font-bold block">Primary Property Address</span>
+                            <span className="font-semibold text-slate-900 mt-0.5 block">{app.propertyAddress || 'Plot 42, Scheme 54'}</span>
+                            <span className="text-[11px] text-slate-500">{app.city || 'Indore'}</span>
+                          </div>
+
+                          <div className="bg-white p-3 rounded-xl border border-slate-200/80">
+                            <span className="text-slate-400 text-[10px] uppercase font-bold block">Identity & Tax IDs</span>
+                            <div className="font-mono text-[11px] text-slate-700 mt-0.5">
+                              <div>PAN: <span className="font-bold text-slate-900">{app.panNumber || 'ABCDE1234F'}</span></div>
+                              <div>Aadhaar: <span className="font-bold text-slate-900">{app.aadhaarNumber || '9876-5432-1098'}</span></div>
+                            </div>
+                          </div>
+
+                          <div className="bg-white p-3 rounded-xl border border-slate-200/80">
+                            <span className="text-slate-400 text-[10px] uppercase font-bold block">Settlement Bank Account</span>
+                            <div className="font-mono text-[11px] text-slate-700 mt-0.5">
+                              <div>A/C: <span className="font-bold text-slate-900">{app.bankAccountNumber || '98765432109876'}</span></div>
+                              <div>IFSC: <span className="font-bold text-slate-900">{app.ifscCode || 'HDFC0001234'}</span></div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Uploaded Verification Deeds */}
+                        <div className="pt-2">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-2">
+                            Submitted Ownership Deeds & Identity Files
                           </span>
+                          <div className="flex flex-wrap gap-2">
+                            {app.documents && app.documents.length > 0 ? (
+                              app.documents.map((doc, i) => (
+                                <a
+                                  key={i}
+                                  href={doc.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-indigo-700 bg-white hover:bg-indigo-50 font-semibold text-xs inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-200 transition shadow-xs"
+                                >
+                                  <FileText className="w-3.5 h-3.5 text-indigo-500" />
+                                  <span>{doc.label || doc.type}</span>
+                                  <ExternalLink className="w-3 h-3 text-indigo-400 ml-0.5" />
+                                </a>
+                              ))
+                            ) : (
+                              <span className="text-xs text-slate-400">No documents attached</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {app.rejectionReason && (
+                          <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
+                            <span className="font-bold">Rejection Feedback:</span> {app.rejectionReason}
+                          </div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -731,3 +793,4 @@ export default function AdminConsolePage() {
     </div>
   );
 }
+

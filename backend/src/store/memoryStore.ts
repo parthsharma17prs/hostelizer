@@ -61,10 +61,20 @@ export interface DBOwnerProfile {
   id: string;
   userId: string;
   businessName: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  ownerPhone?: string;
+  propertyAddress?: string;
+  city?: string;
+  panNumber?: string;
+  aadhaarNumber?: string;
+  bankAccountNumber?: string;
+  ifscCode?: string;
   status: 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED' | 'SUSPENDED';
   rejectionReason?: string;
   reviewedBy?: string;
-  documents: { id: string; type: string; url: string; verified: boolean }[];
+  documents: { id: string; type: string; label?: string; url: string; verified: boolean }[];
+  submittedAt?: string;
   createdAt: Date;
 }
 
