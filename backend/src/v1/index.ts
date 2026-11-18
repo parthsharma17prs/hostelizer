@@ -30,3 +30,4 @@ v1Router.use(authIdentityRoutes);
 v1Router.use(kycVerificationRoutes);
 
 export default v1Router;
+

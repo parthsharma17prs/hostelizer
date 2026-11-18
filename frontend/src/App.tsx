@@ -727,18 +727,9 @@ export default function App() {
         ) : ownerApplication.status === 'UNDER_REVIEW' ? (
           <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-2">
             <div className="font-bold flex items-center gap-2 text-amber-800">
-              <Clock className="w-4 h-4 text-amber-600" /> Application Under Review
+              <Clock className="w-4 h-4 text-amber-600" /> Application Under Review (48hr SLA)
             </div>
-            <p>Your documents are currently queued in the Super Admin verification registry. Live audit active.</p>
-            <div className="flex gap-2 pt-1">
-              <button
-                type="button"
-                onClick={handleApproveApplication}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg cursor-pointer flex items-center gap-1.5 shadow-xs"
-              >
-                <ShieldCheck className="w-4 h-4 text-white" /> Verify & Authorize as Super Admin
-              </button>
-            </div>
+            <p>Your documents are currently queued in the Super Admin verification registry. Super Admin review is processed securely via the Super Admin Console (/admin).</p>
           </div>
         ) : null}
 

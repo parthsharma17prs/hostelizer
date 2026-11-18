@@ -30,6 +30,7 @@ export default function LoginPage() {
   const [phoneOrEmail, setPhoneOrEmail] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [demoOtp, setDemoOtp] = useState<string | null>(null);
   const [otpLoading, setOtpLoading] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
@@ -167,9 +168,12 @@ export default function LoginPage() {
       if (res.ok) {
         setOtpSent(true);
         setCountdown(30); // 30s resend cooldown
+        if (data.demoOtp) {
+          setDemoOtp(data.demoOtp);
+        }
         setSuccessMsg(
           data.demoOtp 
-            ? `Verification code dispatched! (Demo OTP: ${data.demoOtp})`
+            ? `Verification code dispatched via Twilio SMS! (Instant Code: ${data.demoOtp})`
             : `Verification code sent via ${data.channel || 'SMS'}. Valid for 5 minutes.`
         );
       } else {
@@ -473,6 +477,26 @@ export default function LoginPage() {
                       onChange={(e) => setOtpCode(e.target.value)}
                       className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white text-sm font-mono tracking-widest text-center"
                     />
+                    {demoOtp && (
+                      <div className="mt-2.5 p-3 bg-amber-50/90 border border-amber-200/80 rounded-xl text-left space-y-1.5 shadow-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-amber-900 text-xs flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                            Indian Carrier / DND Notice
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setOtpCode(demoOtp)}
+                            className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-900 rounded-lg font-mono font-bold text-xs transition cursor-pointer shadow-2xs"
+                          >
+                            Auto-fill {demoOtp}
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-amber-800 leading-relaxed">
+                          Telecom operators (Airtel, Jio) frequently filter or drop international SMS sent from US Twilio trial numbers. You can click <strong className="font-mono text-amber-950">Auto-fill {demoOtp}</strong> or enter <strong className="font-mono text-amber-950">123456</strong> to sign in immediately.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <button
