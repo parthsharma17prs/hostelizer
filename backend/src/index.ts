@@ -16,6 +16,7 @@ import assetRoutes from './routes/asset.routes';
 import operationsRoutes from './routes/operations.routes';
 import orgRoutes from './routes/org.routes';
 import logRoutes from './routes/log.routes';
+import v1Router from './v1';
 import { initializeSocketChat } from './sockets/chat.socket';
 import { connectMongo } from './models/mongoInit';
 
@@ -60,6 +61,9 @@ app.use('/api/operations', operationsRoutes);
 app.use('/api/orgs', orgRoutes);
 app.use('/api/log', logRoutes);
 app.use('/api/logs', logRoutes);
+
+// Modular API v1 (Auth, User Profile & KYC Verification)
+app.use('/api/v1', v1Router);
 
 // Socket.io real-time chat initialization
 initializeSocketChat(io);
